@@ -14,6 +14,15 @@ ui_*.h
 *.qmlc
 *.jsc
 
+# `ui_*.h` above targets uic output, but it is unanchored and so matches
+# any such name anywhere -- including vendored C that never went near
+# uic. It silently swallowed third_party/mister-fpga-blitter/ui_offload.h,
+# which built fine locally (the file was on disk) and failed only in CI,
+# where the checkout has tracked files alone. Re-include the vendored
+# tree so a future scripts/sync-fpga-vendor.sh run cannot lose a header
+# the same way.
+!third_party/mister-fpga-blitter/ui_*.h
+
 # Compiled files
 *.o
 *.obj

@@ -23,7 +23,7 @@ import Zaparoo.Browse as Browse
 // this file declarative — property bindings and child objects only,
 // no imperative JS or signal-handler bodies, so the designer sees
 // everything in the 2D view.
-ApplicationWindow {
+Item {
     id: root
 
     // Screen constants re-exported from the manager so tests and
@@ -152,8 +152,19 @@ ApplicationWindow {
         if (root.width === targetWidth && root.height === targetHeight)
             return;
         root._crtPreviewResizeGuard = true;
-        root.width = targetWidth;
-        root.height = targetHeight;
+        // Resize the host window, not this item: the window sizes the
+        // content, so assigning our own width here would fight the
+        // anchor that binds us to it. This only ever runs on the
+        // desktop CRT preview (_crtPreviewActive), never on the
+        // offload path, whose window is sized by the render loop.
+        const hostWindow = root.Window.window;
+        if (hostWindow) {
+            hostWindow.width = targetWidth;
+            hostWindow.height = targetHeight;
+        } else {
+            root.width = targetWidth;
+            root.height = targetHeight;
+        }
         root._crtPreviewResizeGuard = false;
     }
 
@@ -167,15 +178,21 @@ ApplicationWindow {
     // FPGA's 320x240 scan-out region). For windowed/preview builds
     // the binding only evaluates once at construction (Screen.width
     // is constant per session) so it doesn't fight user resizes.
-    width: root.fullScreen ? Screen.width : 1280
-    height: root.fullScreen ? Screen.height : 720
-    minimumWidth: _crtPreviewActive ? root.videoWidth * (root.crtPreviewScale > 0 ? root._clampCrtPreviewScale(root.crtPreviewScale) : root._crtPreviewMinScale) : 426
-    minimumHeight: _crtPreviewActive ? root.videoHeight * (root.crtPreviewScale > 0 ? root._clampCrtPreviewScale(root.crtPreviewScale) : root._crtPreviewMinScale) : 240
-    maximumWidth: _crtPreviewActive ? root.videoWidth * (root.crtPreviewScale > 0 ? root._clampCrtPreviewScale(root.crtPreviewScale) : root._crtPreviewMaxScale) : 16777215
-    maximumHeight: _crtPreviewActive ? root.videoHeight * (root.crtPreviewScale > 0 ? root._clampCrtPreviewScale(root.crtPreviewScale) : root._crtPreviewMaxScale) : 16777215
-    visible: true
-    visibility: root.fullScreen ? Window.FullScreen : Window.Windowed
-    title: qsTr("Zaparoo Frontend")
+    // Sized by whatever hosts this tree, not self-sized. AppWindow.qml
+    // owns the window geometry (and the min/max constraints, which are
+    // Window properties and cannot live on an Item); the FPGA offload's
+    // render loop sizes this item directly to the fabric's framebuffer.
+    // Keeping the sizing in the host is what lets the same visual tree
+    // serve both without a Window in the middle — see
+    // docs/fpga-offload.md.
+    //
+    // These are IMPLICIT sizes, not bindings on width/height: an Item
+    // falls back to them when nothing else sizes it, so a bare
+    // `Main {}` (the QML tests, and Design Studio) still gets the
+    // 1280x720 design canvas, while a host that anchors or resizes us
+    // wins without a binding conflict.
+    implicitWidth: 1280
+    implicitHeight: 720
 
     onWidthChanged: {
         if (root._crtPreviewActive && root.crtPreviewScale === 0 && !root._crtPreviewResizeGuard)
@@ -185,13 +202,22 @@ ApplicationWindow {
         if (root._crtPreviewActive && root.crtPreviewScale === 0 && !root._crtPreviewResizeGuard)
             root.applyCrtPreviewScale(root._crtPreviewEffectiveScale);
     }
-    onFrameSwapped: {
-        if (root._firstFrameSeen)
-            return;
-        root._firstFrameSeen = true;
-        root._statusIconsEnabled = true;
-        root._headerMediaActivityEnabled = true;
-        root._startupTrace("startup/qml firstFrameSwapped", "statusIconsEnabled=" + root._statusIconsEnabled, "mediaActivityEnabled=" + root._headerMediaActivityEnabled);
+
+    // frameSwapped belongs to the window, which is no longer this
+    // object. Window.window resolves to whichever window is hosting
+    // the tree, so this works unchanged on the windowed path and on
+    // the offload's QQuickRenderControl window.
+    Connections {
+        target: Window.window
+        ignoreUnknownSignals: true
+        function onFrameSwapped(): void {
+            if (root._firstFrameSeen)
+                return;
+            root._firstFrameSeen = true;
+            root._statusIconsEnabled = true;
+            root._headerMediaActivityEnabled = true;
+            root._startupTrace("startup/qml firstFrameSwapped", "statusIconsEnabled=" + root._statusIconsEnabled, "mediaActivityEnabled=" + root._headerMediaActivityEnabled);
+        }
     }
 
     // When the window crosses to a different screen (e.g. dev drags

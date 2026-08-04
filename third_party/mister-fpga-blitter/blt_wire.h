@@ -1,0 +1,185 @@
+/*
+ *  VENDORED — do not edit in this tree.
+ *
+ *  Source : github.com/gmcnaught/mister-fpga-blitter — host/blt_wire.h
+ *  Commit : 6ced360e28987a31723ff79515df35777f2cd318
+ *  Re-sync: scripts/sync-fpga-vendor.sh /path/to/mister-fpga-blitter
+ *
+ *  Upstream is GPL-3.0. The copyright holder additionally licenses these files
+ *  for use in Zaparoo Frontend under the terms in COPYING, so the combined
+ *  work links cleanly; see third_party/mister-fpga-blitter/README.md.
+ *
+ *  SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-PolyForm-Noncommercial-1.0.0
+ */
+/* VENDORED from github.com/gmcnaught/mister-fpga-blitter (host/blt_wire.h) — do not edit here; edit upstream + re-copy. */
+/*
+ *  blt_wire.h — canonical pack/unpack between blt_cmd_t and the 32-byte on-wire
+ *  command word the fabric reads from the DDR ring. Single source of truth for
+ *  the command layout, shared by the host emitter (blt_emitter.c), the sim
+ *  vector generator (sim/gen_vectors.c), and any RTL cross-check.
+ *
+ *  Wire layout (32 bytes = 8x u32, little-endian; see docs/blitter-protocol.md
+ *  and the unpack in rtl/blitter_top.sv — these MUST agree):
+ *    u32[0] = opcode | blend<<8 | format<<16 | flags<<24
+ *    u32[1] = src_off
+ *    u32[2] = src_stride | src_x<<16
+ *    u32[3] = w | h<<16
+ *    u32[4] = src_y
+ *    u32[5] = (u16)dst_x | (u16)dst_y<<16
+ *    u32[6] = colorkey | alpha<<16 | cmod_b<<24
+ *    u32[7] = color | cmod_r<<16 | cmod_g<<24
+ *  [v2 escape-elim] the 3 free wire bytes (27,30,31) carry the RGB888 color-mod
+ *  tint when flags & BLT_F_COLORMOD: byte27=cb, byte30=cr, byte31=cg. Sourced from
+ *  blt_cmd_t._pad[0..2]={cr,cg,cb}. MUST AGREE with rtl/blitter_top.sv c_cmod_*.
+ *  [PAL8 v1] when format==BLT_FMT_PAL8, color(u32[7] low16) = pal_id[11:8] | base_off[7:0].
+ *
+ *  [#52 resident / Tier B] BLT_OP_TILELIST_RES and BLT_OP_FRT_UPLOAD reuse this same
+ *  32-byte command layout (no new pack/unpack):
+ *    - TILELIST_RES: identical header to TILELIST (u32[3]=N, u32[5]=entry byte offset,
+ *      src_off/stride/format/blend/flags/key shared). The N entries are 8-byte
+ *      blt_tile_entry_res_t {u16 pattern_id; i16 dst_x,dst_y; u16 _rsvd} written LE,
+ *      one per qword, into the TL_BUF region the fabric reads.
+ *    - FRT_UPLOAD: u32[3] = w|h<<16 = qword count of the frame-rect table to copy from
+ *      the FRT DDR region into the fabric frt BRAM. All other fields 0.
+ *  FRT entries are 8-byte blt_frame_rect_t {u16 src_x,src_y,w,h} (one qword each); CFT
+ *  entries are u16 little-endian. Host structs are LE so a raw store matches the wire.
+ *
+ *  GPL-3.0.
+ */
+#ifndef BLT_WIRE_H
+#define BLT_WIRE_H
+
+#include "blitter_ref.h"
+#include <stdint.h>
+
+#define BLT_CMD_BYTES 32
+
+static inline void blt_wr32(uint8_t *p, uint32_t v) {
+    p[0]=v; p[1]=v>>8; p[2]=v>>16; p[3]=v>>24;
+}
+static inline uint32_t blt_rd32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1]<<8) | ((uint32_t)p[2]<<16) | ((uint32_t)p[3]<<24);
+}
+
+/* Pack a command into 32 little-endian bytes. */
+static inline void blt_pack_cmd(const blt_cmd_t *c, uint8_t out[BLT_CMD_BYTES]) {
+    blt_wr32(out+0,  (uint32_t)c->opcode | ((uint32_t)c->blend_mode<<8) |
+                     ((uint32_t)c->format<<16) | ((uint32_t)c->flags<<24));
+    blt_wr32(out+4,  c->src_off);
+    blt_wr32(out+8,  (uint32_t)c->src_stride | ((uint32_t)c->src_x<<16));
+    blt_wr32(out+12, (uint32_t)c->w | ((uint32_t)c->h<<16));
+    blt_wr32(out+16, (uint32_t)c->src_y);
+    blt_wr32(out+20, (uint32_t)(uint16_t)c->dst_x | ((uint32_t)(uint16_t)c->dst_y<<16));
+    /* [v2] _pad[2]=cb -> byte27; _pad[0]=cr -> byte30; _pad[1]=cg -> byte31.
+     * Zero when BLT_F_COLORMOD is clear (memset) -> RTL ignores them. */
+    blt_wr32(out+24, (uint32_t)c->colorkey | ((uint32_t)c->alpha<<16) |
+                     ((uint32_t)c->_pad[2]<<24));
+    blt_wr32(out+28, (uint32_t)c->color | ((uint32_t)c->_pad[0]<<16) |
+                     ((uint32_t)c->_pad[1]<<24));
+}
+
+/* Unpack 32 little-endian bytes into a command (inverse of blt_pack_cmd). */
+static inline void blt_unpack_cmd(const uint8_t in[BLT_CMD_BYTES], blt_cmd_t *c) {
+    uint32_t u0=blt_rd32(in+0),  u2=blt_rd32(in+8),  u3=blt_rd32(in+12);
+    uint32_t u5=blt_rd32(in+20), u6=blt_rd32(in+24);
+    c->opcode     = u0 & 0xFF;
+    c->blend_mode = (u0>>8)  & 0xFF;
+    c->format     = (u0>>16) & 0xFF;
+    c->flags      = (u0>>24) & 0xFF;
+    c->src_off    = blt_rd32(in+4);
+    c->src_stride = u2 & 0xFFFF;
+    c->src_x      = u2 >> 16;
+    c->w          = u3 & 0xFFFF;
+    c->h          = u3 >> 16;
+    c->src_y      = blt_rd32(in+16) & 0xFFFF;
+    c->dst_x      = (int16_t)(u5 & 0xFFFF);
+    c->dst_y      = (int16_t)(u5 >> 16);
+    c->colorkey   = u6 & 0xFFFF;
+    c->alpha      = (u6>>16) & 0xFF;
+    uint32_t u7   = blt_rd32(in+28);
+    c->color      = u7 & 0xFFFF;
+    /* [v2] color-mod tint (meaningful only when flags & BLT_F_COLORMOD) */
+    c->_pad[2]    = (u6>>24) & 0xFF;   /* cb */
+    c->_pad[0]    = (u7>>16) & 0xFF;   /* cr */
+    c->_pad[1]    = (u7>>24) & 0xFF;   /* cg */
+}
+
+/*
+ *  BLT_OP_TRILIST header field mapping (into blt_cmd_t / the 32-byte wire word).
+ *  The triangle list itself lives in a separate vertex entry buffer (blt_vtx_t
+ *  triples); the header only points at it and carries the shared draw params:
+ *
+ *    opcode      = BLT_OP_TRILIST (12)
+ *    blend_mode  = BLT_BLEND_*  (COPY / CONST_ALPHA / ADD / MULTIPLY / COLORKEY)
+ *    format      = BLT_FMT_*    (texture page format)
+ *    src_off     = texture page base byte offset in the source heap
+ *    src_stride  = texture row stride in bytes
+ *    src_x       = texture width  in texels
+ *    src_y       = texture height in texels
+ *    w           = triangle count
+ *    dst_x       = entry_off & 0xFFFF        \ byte offset of the first vertex
+ *    dst_y       = (entry_off >> 16) & 0xFFFF / in the entry buffer
+ *    colorkey    = RGB565 transparent key (COLORKEY mode)
+ *    alpha       = global alpha 0..255 (usually 255; scales per-vertex alpha)
+ *
+ *  This reuses the same dst_x|dst_y<<16 = entry byte-offset and w = count
+ *  convention as BLT_OP_TILELIST_RES, so the existing wire codec above already
+ *  round-trips a TRILIST header without change.
+ */
+
+/* [Stage 2 / Task 4b] Sprite-list entry: 24 bytes, QWORD-ALIGNED (THREE qwords) so
+ * the fabric reads it with aligned fetches — no 3-qword unaligned window + barrel
+ * shift like the 12-byte blt_tile_entry_t needs. Unlike tiles, sprites do NOT share
+ * one texture, so src_off is PER ENTRY; stride/format/blend stay in the header.
+ *
+ * [Task 4b] `color` is likewise PER ENTRY. A tile layer is one tileset = one
+ * palette, so OP_TILELIST can keep the palette in its header; sprites are Y-sorted
+ * across many sheets, so the palette varies entry to entry for exactly the same
+ * reason src_off does. For BLT_FMT_PAL8 it is blt_pal_color(pal_id, base_off);
+ * 0 otherwise. Bytes 20-23 are explicit tail padding to the 3-qword size (the
+ * alternative, a 20-byte entry, would break the aligned-fetch property). */
+typedef struct {
+    uint32_t src_off;              /* source surface base offset                  */
+    uint16_t src_x, src_y, w, h;   /* source rect                                 */
+    int16_t  dst_x, dst_y;         /* dst, header bias added by the fabric        */
+    uint16_t color;                /* [Task 4b] PAL8 pal_id/base_off; 0 otherwise */
+    uint16_t _rsvd;                /* reserved (bytes 18-19), written as 0        */
+    uint32_t _rsvd2;               /* pad to 24 B = 3 qwords (bytes 20-23), 0     */
+} blt_sprite_entry_t;
+
+/* Wire size of ONE sprite-list entry. Every stride/cursor/cap computation in the
+ * emitter, the channel, the reference model and the tests MUST use this — a stray
+ * literal would place entries at the wrong base and corrupt SP_BUF silently. */
+#define BLT_SPRITE_ENTRY_BYTES 24
+
+static inline void blt_pack_sprite_entry(uint8_t *d, const blt_sprite_entry_t *e)
+{
+    d[0]=(uint8_t)(e->src_off); d[1]=(uint8_t)(e->src_off>>8);
+    d[2]=(uint8_t)(e->src_off>>16); d[3]=(uint8_t)(e->src_off>>24);
+    d[4]=(uint8_t)(e->src_x); d[5]=(uint8_t)(e->src_x>>8);
+    d[6]=(uint8_t)(e->src_y); d[7]=(uint8_t)(e->src_y>>8);
+    d[8]=(uint8_t)(e->w);     d[9]=(uint8_t)(e->w>>8);
+    d[10]=(uint8_t)(e->h);    d[11]=(uint8_t)(e->h>>8);
+    d[12]=(uint8_t)(e->dst_x);d[13]=(uint8_t)((uint16_t)e->dst_x>>8);
+    d[14]=(uint8_t)(e->dst_y);d[15]=(uint8_t)((uint16_t)e->dst_y>>8);
+    /* [Task 4b] bytes 16-19: per-entry palette word then the reserved half-word,
+     * both little-endian like every other field. */
+    d[16]=(uint8_t)(e->color); d[17]=(uint8_t)(e->color>>8);
+    d[18]=(uint8_t)(e->_rsvd); d[19]=(uint8_t)(e->_rsvd>>8);
+    /* Bytes 20-23: tail padding. Written explicitly (not left stale) so a re-used
+     * SP_BUF slot never hands the fabric another frame's bytes in a field a later
+     * wire revision might start reading. */
+    d[20]=(uint8_t)(e->_rsvd2);      d[21]=(uint8_t)(e->_rsvd2>>8);
+    d[22]=(uint8_t)(e->_rsvd2>>16);  d[23]=(uint8_t)(e->_rsvd2>>24);
+}
+
+/* [PAL8 v1.1] Palette-indexed source: pack pal_id (5b, 32 banks) and base_off (8b)
+ * into the color word. pal_id occupies bits[12:8], base_off bits[7:0]; bits[15:13]
+ * are free. The fabric decodes c_color[12:8] (comp_pipeline c_pal_id[4:0]). */
+static inline uint16_t blt_pal_color(uint8_t pal_id, uint8_t base_off) {
+    return (uint16_t)(((uint16_t)(pal_id & 0x1F) << 8) | base_off);
+}
+static inline uint8_t  blt_pal_id(uint16_t color)   { return (color >> 8) & 0x1F; }
+static inline uint8_t  blt_base_off(uint16_t color) { return color & 0xFF; }
+
+#endif /* BLT_WIRE_H */

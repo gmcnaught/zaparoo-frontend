@@ -2955,10 +2955,14 @@ MainLayout {
 
     // Cancel a stuck repeat if the window loses focus mid-hold; without
     // this, a missed Keys.onReleased (alt-tab, modal grab, compositor
-    // quirk) would leave the timer ticking forever. `root.active` is
-    // ApplicationWindow's own active property.
-    onActiveChanged: {
-        if (!root.active)
+    // quirk) would leave the timer ticking forever. This tree is an
+    // Item rather than a Window (AppWindow.qml owns the window, so the
+    // FPGA offload can host the same tree), so activeness comes from
+    // the Window attached property instead of a self property.
+    readonly property bool _hostWindowActive: root.Window.active
+
+    on_HostWindowActiveChanged: {
+        if (!root._hostWindowActive)
             root._stopRepeat();
     }
 

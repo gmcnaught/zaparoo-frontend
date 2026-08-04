@@ -7,6 +7,7 @@
 // qmllint disable compiler
 
 import QtQuick
+import QtQuick.Window
 import QtTest
 import Zaparoo.App
 import Zaparoo.Browse as Browse
@@ -22,11 +23,19 @@ TestCase {
     name: "UiNavigation"
     when: windowShown
 
-    Main {
-        id: main
-        fullScreen: false
+    // Main is an Item now (AppWindow owns the window, so the FPGA
+    // offload can host the same tree). An Item only becomes visible
+    // inside a shown window, so the test provides one.
+    Window {
+        visible: true
         width: 1280
         height: 720
+
+        Main {
+            id: main
+            fullScreen: false
+            anchors.fill: parent
+        }
     }
 
     function init(): void {
