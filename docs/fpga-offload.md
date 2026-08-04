@@ -190,7 +190,8 @@ running scene graph.
    are emit-side accounting, not frame times.
 2. **Which fabric this runs against is unresolved, and it is not a detail** —
    see the next section.
-3. **The QML entry point must be Item-rooted** — see below.
+3. The QML entry point is Item-rooted now, so the render loop can start —
+   but it has never actually started against a fabric.
 
 ## The two fabric lineages
 
@@ -229,16 +230,32 @@ which branch `scripts/sync-fpga-vendor.sh` pulls from, whether the text path
 survives in its current form, and whether `BlitterRegion`'s map is 16 or
 18 MiB.
 
-## Known blocker: the QML entry point
+## The QML entry point
 
 `QQuickRenderControl` requires a `QQuickWindow` it constructed, so a
-QML-declared `Window` can never be redirected to a render target. The
-frontend's tree is rooted at `ApplicationWindow` (`MainLayout.qml`, which
-`Main.qml` extends), so the render loop currently has nothing Item-rooted to
-host: it logs this and returns false, and the app stays on the software path.
+QML-declared `Window` can never be redirected to a render target. The tree
+was rooted at `ApplicationWindow`, which is why the render loop originally
+had nothing to host.
 
-Closing it means making the visual root an `Item` and moving the window
-properties into a thin wrapper for the desktop build. That touches screen
-routing, which `AGENTS.md` puts behind an explicit confirmation, so it is
-deliberately **not** done here. Everything downstream of that change is
-complete and waiting for it.
+That is resolved. The visual root is now an `Item`:
+
+- **`MainLayout.qml`** — an `Item`. Sized by its host through
+  `implicitWidth`/`implicitHeight`, so a bare `Main {}` still gets the
+  1280×720 design canvas while a host that anchors or resizes it wins with
+  no binding conflict.
+- **`AppWindow.qml`** — a thin `ApplicationWindow` owning geometry,
+  visibility, title and the min/max constraints (all Window properties), and
+  mounting `Main` filling it. This is what `main.cpp` loads on the software
+  path.
+- **The offload** mounts `Main` directly into its own window
+  (`BlitterRenderLoop::Config::type` defaults to `Main`).
+
+Two things that used to come from being a Window now come from the
+`Window` attached property, so they work identically on both paths: the
+first-frame gate listens to `Window.window`'s `frameSwapped`, and the
+stuck-repeat cancel reads `Window.active`.
+
+`applyCrtPreviewScale` resizes the host window rather than the item, since
+writing the item's own width would fight `anchors.fill`. That path only runs
+on the desktop CRT preview, never on the offload, whose window the render
+loop sizes.
