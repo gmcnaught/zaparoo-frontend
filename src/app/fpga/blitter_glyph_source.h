@@ -15,7 +15,7 @@
 
 extern "C"
 {
-#include "vendor/glyph_cache.h"
+#include "mister-fpga-blitter/glyph_cache.h"
 }
 
 namespace zaparoo::fpga
@@ -35,7 +35,7 @@ namespace zaparoo::fpga
 //
 // Cache keys are packed (fontId << 16) | glyphIndex and handed to the
 // vendored cache through its UTF-8 entry point. That codec is a
-// permissive one (see utf8_next in vendor/glyph_cache.c: no surrogate
+// permissive one (see utf8_next in mister-fpga-blitter/glyph_cache.c: no surrogate
 // or overlong rejection), so any 21-bit value round-trips exactly.
 // fontId starts at 1 so a key is never 0, which would terminate the
 // string it is encoded into.
@@ -67,22 +67,22 @@ class BlitterGlyphSource
     // Above 1, glyphs are rasterized from outlines instead (see
     // rasterize()), which buys smooth marquee scrolling at the cost of
     // the font engine's hinting.
-    int phases() const
+    [[nodiscard]] int phases() const
     {
         return m_phases;
     }
 
-    uio_rasterize_fn callback() const;
+    [[nodiscard]] uio_rasterize_fn callback() const;
     void* context()
     {
         return this;
     }
 
-    std::uint32_t rasterized() const
+    [[nodiscard]] std::uint32_t rasterized() const
     {
         return m_rasterized;
     }
-    std::uint32_t refused() const
+    [[nodiscard]] std::uint32_t refused() const
     {
         return m_refused;
     }

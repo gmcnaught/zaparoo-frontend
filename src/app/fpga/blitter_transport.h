@@ -99,21 +99,21 @@ class BlitterTransport
     // false on failure; the caller falls back to the software path.
     bool open();
     void close();
-    bool isOpen() const
+    [[nodiscard]] bool isOpen() const
     {
         return m_base != nullptr;
     }
 
     // Caller-owned buffers handed to blt_emitter_init(). Valid only
     // while isOpen().
-    std::uint8_t* ring() const;
-    std::uint8_t* heap() const;
-    std::uint8_t* clutBuffer() const;
-    static constexpr std::size_t ringBytes()
+    [[nodiscard]] std::uint8_t* ring() const;
+    [[nodiscard]] std::uint8_t* heap() const;
+    [[nodiscard]] std::uint8_t* clutBuffer() const;
+    [[nodiscard]] static constexpr std::size_t ringBytes()
     {
         return BlitterRegion::kRingBytes;
     }
-    static constexpr std::size_t heapBytes()
+    [[nodiscard]] static constexpr std::size_t heapBytes()
     {
         return BlitterRegion::kHeapBytes;
     }
@@ -132,21 +132,21 @@ class BlitterTransport
     // under it. Returns false on timeout.
     bool waitForIdle(int timeoutMs);
 
-    std::uint32_t status() const;
-    std::uint32_t submitSeq() const;
-    std::uint32_t doneSeq() const;
+    [[nodiscard]] std::uint32_t status() const;
+    [[nodiscard]] std::uint32_t submitSeq() const;
+    [[nodiscard]] std::uint32_t doneSeq() const;
 
     // Frames whose waitForIdle() timed out since open(). A nonzero
     // value means the fabric stalled and frames were built on top of a
     // ring the fabric may still have been reading, so it is reported
     // rather than swallowed.
-    std::uint32_t stalls() const
+    [[nodiscard]] std::uint32_t stalls() const
     {
         return m_stalls;
     }
 
   private:
-    volatile std::uint32_t* word(ControlWord w) const;
+    [[nodiscard]] volatile std::uint32_t* word(ControlWord w) const;
 
     int m_memFd = -1;
     volatile std::uint8_t* m_base = nullptr;

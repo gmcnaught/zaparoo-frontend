@@ -7,7 +7,7 @@
  *
  *  Upstream is GPL-3.0. The copyright holder additionally licenses these files
  *  for use in Zaparoo Frontend under the terms in COPYING, so the combined
- *  work links cleanly; see src/app/fpga/vendor/README.md.
+ *  work links cleanly; see third_party/mister-fpga-blitter/README.md.
  *
  *  SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-PolyForm-Noncommercial-1.0.0
  */

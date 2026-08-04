@@ -39,7 +39,7 @@ struct FallbackStats
         paths = text = transforms = images = other = 0;
         px = 0;
     }
-    quint32 draws() const
+    [[nodiscard]] quint32 draws() const
     {
         return paths + text + transforms + images + other;
     }
@@ -63,7 +63,7 @@ class BlitterPaintEngine : public QPaintEngine
 
     bool begin(QPaintDevice* dev) override;
     bool end() override;
-    Type type() const override
+    [[nodiscard]] Type type() const override
     {
         return QPaintEngine::User;
     }
@@ -79,7 +79,7 @@ class BlitterPaintEngine : public QPaintEngine
     void drawTiledPixmap(const QRectF& r, const QPixmap& pm, const QPointF& offset) override;
     void drawTextItem(const QPointF& p, const QTextItem& ti) override;
 
-    const FallbackStats& fallbacks() const
+    [[nodiscard]] const FallbackStats& fallbacks() const
     {
         return m_fallback;
     }
@@ -111,7 +111,7 @@ class BlitterPaintEngine : public QPaintEngine
     // modals). Anything else -- a squircle, per-corner radii, a
     // clipped path -- must fall back rather than be silently redrawn
     // as something it is not.
-    bool asRoundedRect(const QPainterPath& path, QRect* rect, int* radius) const;
+    [[nodiscard]] bool asRoundedRect(const QPainterPath& path, QRect* rect, int* radius) const;
 
     void fillRect(const QRect& r, const QColor& color);
     uio_image_ref_t imageRef(const QImage& img);
@@ -127,7 +127,7 @@ class BlitterPaintEngine : public QPaintEngine
                         quint32* counter);
     void recycleScratch();
 
-    QRect clipped(const QRect& r) const;
+    [[nodiscard]] QRect clipped(const QRect& r) const;
 
     BlitterSurface* m_surface = nullptr;
     uio_t* m_uio = nullptr;

@@ -10,17 +10,23 @@ enable_language(C)
 
 # ── vendored display-list layer ───────────────────────────────────────────────
 # Upstream code from github.com/gmcnaught/mister-fpga-blitter, re-synced by
-# scripts/sync-fpga-vendor.sh. Built as its own target so the project's strict
-# warning set and clang-tidy configuration are NOT imposed on code we do not
-# own and must not edit locally.
+# scripts/sync-fpga-vendor.sh. It lives under third_party/ rather than src/ for
+# a concrete reason, not tidiness: the lint globs and .clang-tidy's
+# HeaderFilterRegex are both rooted at src/, and clang-tidy applies the config
+# of the translation unit being analysed rather than of each header it pulls
+# in -- so vendored headers included from our own sources would be diagnosed
+# with no way to act on the findings. Keeping them outside src/ is what makes
+# them genuinely exempt. It is also built as its own target so the project's
+# strict warning set is not imposed on code we do not own.
+set(VENDOR_DIR "${CMAKE_SOURCE_DIR}/third_party/mister-fpga-blitter")
 add_library(
     zaparoo_fpga_vendor STATIC
-    vendor/blt_alloc.c
-    vendor/blt_emitter.c
-    vendor/corner_atlas.c
-    vendor/font6x8.c
-    vendor/ui_offload.c
-    vendor/glyph_cache.c
+    "${VENDOR_DIR}/blt_alloc.c"
+    "${VENDOR_DIR}/blt_emitter.c"
+    "${VENDOR_DIR}/corner_atlas.c"
+    "${VENDOR_DIR}/font6x8.c"
+    "${VENDOR_DIR}/ui_offload.c"
+    "${VENDOR_DIR}/glyph_cache.c"
 )
 set_target_properties(
     zaparoo_fpga_vendor
@@ -28,12 +34,12 @@ set_target_properties(
                C_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
 )
-target_include_directories(zaparoo_fpga_vendor PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(zaparoo_fpga_vendor PUBLIC "${CMAKE_SOURCE_DIR}/third_party" "${VENDOR_DIR}")
 
 # ── the golden reference model ────────────────────────────────────────────────
 # Executes display lists in software. Test-only: it is what the host tests diff
 # the emitted lists against, and it must never be linked into the frontend.
-add_library(zaparoo_fpga_refmodel STATIC vendor/blitter_ref.c vendor/blt_tri.c)
+add_library(zaparoo_fpga_refmodel STATIC "${VENDOR_DIR}/blitter_ref.c" "${VENDOR_DIR}/blt_tri.c")
 set_target_properties(
     zaparoo_fpga_refmodel
     PROPERTIES C_STANDARD 11

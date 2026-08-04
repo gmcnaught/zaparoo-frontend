@@ -15,8 +15,8 @@
 
 extern "C"
 {
-#include "vendor/glyph_cache.h"
-#include "vendor/ui_offload.h"
+#include "mister-fpga-blitter/glyph_cache.h"
+#include "mister-fpga-blitter/ui_offload.h"
 }
 
 namespace zaparoo::fpga
@@ -70,7 +70,7 @@ class BlitterSurface
                     std::size_t clutBytes);
 
     void shutdown();
-    bool isValid() const
+    [[nodiscard]] bool isValid() const
     {
         return m_ready;
     }
@@ -94,11 +94,11 @@ class BlitterSurface
     {
         return *m_glyphs;
     }
-    const Config& config() const
+    [[nodiscard]] const Config& config() const
     {
         return m_config;
     }
-    QSize size() const
+    [[nodiscard]] QSize size() const
     {
         return m_config.size;
     }
@@ -110,12 +110,12 @@ class BlitterSurface
     // that the scene graph put on top of it.
     void openTextBatch();
     void flushTextBatch();
-    bool textBatchOpen() const
+    [[nodiscard]] bool textBatchOpen() const
     {
         return uio_text_batch_active(&m_uio) != 0;
     }
 
-    const uio_stats_t& stats() const
+    [[nodiscard]] const uio_stats_t& stats() const
     {
         return m_uio.stats;
     }
@@ -125,7 +125,7 @@ class BlitterSurface
     }
     // Commands lost to a full ring, accumulated since init. Nonzero
     // means frames were published with content missing.
-    std::uint32_t droppedCommands() const
+    [[nodiscard]] std::uint32_t droppedCommands() const
     {
         return m_dropped;
     }

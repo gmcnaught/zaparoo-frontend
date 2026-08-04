@@ -21,7 +21,7 @@ struct GlyphRun
     QList<quint32> indexes;
     QList<QPointF> positions;
 
-    bool isEmpty() const
+    [[nodiscard]] bool isEmpty() const
     {
         return indexes.isEmpty();
     }

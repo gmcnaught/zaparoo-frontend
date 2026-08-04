@@ -67,12 +67,12 @@ class BlitterRenderLoop : public QObject
 
     // The window the scene lives in, so the caller can route input to
     // it. Null until start() succeeds.
-    QQuickWindow* window() const
+    [[nodiscard]] QQuickWindow* window() const
     {
         return m_window.get();
     }
 
-    quint64 framesRendered() const
+    [[nodiscard]] quint64 framesRendered() const
     {
         return m_frames;
     }

@@ -3,7 +3,7 @@
 # Copyright (c) 2026 Wizzo Pty Ltd and the Zaparoo Project contributors.
 # SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 #
-# Re-sync src/app/fpga/vendor/ from a mister-fpga-blitter checkout.
+# Re-sync third_party/mister-fpga-blitter/ from an upstream checkout.
 #
 # The vendored files are the FPGA blitter's host-side display-list layer. They
 # are upstream-owned: never edit them in this tree, edit them in
@@ -21,7 +21,7 @@ if [[ -z "${UPSTREAM}" || ! -d "${UPSTREAM}/.git" ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${REPO_ROOT}/src/app/fpga/vendor"
+DEST="${REPO_ROOT}/third_party/mister-fpga-blitter"
 SHA="$(git -C "${UPSTREAM}" rev-parse HEAD)"
 
 # Upstream path -> vendored basename. This is the full include closure of
@@ -68,7 +68,7 @@ for rel in "${FILES[@]}"; do
  *
  *  Upstream is GPL-3.0. The copyright holder additionally licenses these files
  *  for use in Zaparoo Frontend under the terms in COPYING, so the combined
- *  work links cleanly; see src/app/fpga/vendor/README.md.
+ *  work links cleanly; see third_party/mister-fpga-blitter/README.md.
  *
  *  SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-PolyForm-Noncommercial-1.0.0
  */

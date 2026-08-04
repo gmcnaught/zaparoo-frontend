@@ -27,19 +27,19 @@ class BlitterPaintDevice : public QPaintDevice
     explicit BlitterPaintDevice(BlitterSurface* surface);
     ~BlitterPaintDevice() override;
 
-    QPaintEngine* paintEngine() const override;
+    [[nodiscard]] QPaintEngine* paintEngine() const override;
 
-    BlitterPaintEngine* engine() const
+    [[nodiscard]] BlitterPaintEngine* engine() const
     {
         return m_engine.get();
     }
-    QSize size() const
+    [[nodiscard]] QSize size() const
     {
         return m_size;
     }
 
   protected:
-    int metric(PaintDeviceMetric metric) const override;
+    [[nodiscard]] int metric(PaintDeviceMetric metric) const override;
 
   private:
     BlitterSurface* m_surface = nullptr;

@@ -29,7 +29,7 @@ constexpr std::uint32_t makeGlyphKey(int fontId, std::uint32_t glyphIndex)
 
 // Encode a key the way the vendored glyph cache's decoder reads it.
 //
-// That decoder (utf8_next in vendor/glyph_cache.c) is a permissive
+// That decoder (utf8_next in mister-fpga-blitter/glyph_cache.c) is a permissive
 // UTF-8 reader: it rejects neither surrogates nor overlong forms, so
 // any value that fits in 21 bits round-trips exactly. This is NOT a
 // conforming UTF-8 encoder and must not be used for text -- it exists

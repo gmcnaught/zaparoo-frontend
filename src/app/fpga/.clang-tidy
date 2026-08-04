@@ -1,0 +1,26 @@
+# Zaparoo Frontend
+# Copyright (c) 2026 Wizzo Pty Ltd and the Zaparoo Project contributors.
+# SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
+#
+# This directory talks to two things the C++ Core Guidelines assume you are
+# not talking to: a C ABI (the vendored display-list emitter) and a physical
+# DDR region reached through mmap. Reinterpreting a mapped byte pointer as a
+# volatile control word, casting away the volatile qualifier to hand a region
+# to munmap, and walking pointers into a command ring are not smells here --
+# they are the interface. Disabling them locally keeps the checks meaningful
+# everywhere else rather than scattering NOLINT through every function.
+#
+# easily-swappable-parameters goes too: the signatures here are QPaintEngine's
+# virtuals and the uio_rasterize_fn callback ABI, neither of which we get to
+# reorder.
+---
+InheritParentConfig: true
+Checks: >
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-pro-type-cstyle-cast,
+  -bugprone-easily-swappable-parameters,
+...

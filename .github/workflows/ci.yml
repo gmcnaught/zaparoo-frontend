@@ -196,6 +196,19 @@ jobs:
         run: cmake --build build --target lint
       - name: Check translations are up to date
         run: bash scripts/check-translations-updated.sh build
+      # The default FPGA offload build reaches the fabric's glyph atlas
+      # only for text that carries a source string, which excludes QML
+      # Text. Serving that needs Qt's private text headers, so the
+      # option stays off by default -- but the translation unit behind
+      # it still has to compile, and it is the one most exposed to Qt
+      # version drift. Flipping the option in the existing build tree
+      # rebuilds only that one target, so this costs a single TU rather
+      # than a second configure of the whole project. Runs last because
+      # it mutates the tree the steps above depend on.
+      - name: Verify shaped-glyph access compiles
+        run: >
+          cmake -S . -B build -DZAPAROO_FPGA_QT_PRIVATE=ON
+          && cmake --build build --target zaparoo_fpga
       - name: Upload frontend binary
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

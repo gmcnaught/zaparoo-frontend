@@ -14,12 +14,13 @@
 
 extern "C"
 {
-#include "vendor/blitter_ref.h"
-#include "vendor/glyph_cache.h"
-#include "vendor/ui_offload.h"
+#include "mister-fpga-blitter/blitter_ref.h"
+#include "mister-fpga-blitter/glyph_cache.h"
+#include "mister-fpga-blitter/ui_offload.h"
 }
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -29,23 +30,32 @@ extern "C"
 namespace
 {
 
-int g_failures = 0;
-int g_checks = 0;
+struct Results
+{
+    int checks = 0;
+    int failures = 0;
+};
+
+Results& results()
+{
+    static Results r;
+    return r;
+}
 
 void check(bool ok, const char* what)
 {
-    g_checks++;
+    results().checks++;
     if (!ok)
     {
-        g_failures++;
+        results().failures++;
         std::fprintf(stderr, "FAIL: %s\n", what);
     }
 }
 
 // ── a display-list harness over plain memory ─────────────────────────
 
-constexpr std::size_t kRingBytes = 256U * 1024U;
-constexpr std::size_t kHeapBytes = 4U * 1024U * 1024U;
+constexpr std::size_t kRingBytes = std::size_t{256} * 1024;
+constexpr std::size_t kHeapBytes = std::size_t{4} * 1024 * 1024;
 constexpr std::size_t kClutBytes = static_cast<std::size_t>(BLT_CLUT_BANKS) * BLT_CLUT_ENTRIES * 4U;
 
 struct Harness
@@ -53,7 +63,8 @@ struct Harness
     std::vector<std::uint8_t> ring{std::vector<std::uint8_t>(kRingBytes, 0)};
     std::vector<std::uint8_t> heap{std::vector<std::uint8_t>(kHeapBytes, 0)};
     std::vector<std::uint8_t> clut{std::vector<std::uint8_t>(kClutBytes, 0)};
-    std::vector<std::uint16_t> fb{std::vector<std::uint16_t>(BLT_FB_PIXELS, 0)};
+    std::vector<std::uint16_t> fb{
+        std::vector<std::uint16_t>(static_cast<std::size_t>(BLT_FB_WIDTH) * BLT_FB_HEIGHT, 0)};
     blt_emitter_t emitter{};
     uio_t uio{};
 
@@ -85,7 +96,7 @@ struct Harness
         std::vector<blt_cmd_t> cmds(static_cast<std::size_t>(count) + 1);
         for (int i = 0; i < count; i++)
         {
-            blt_unpack_cmd(ring.data() + (static_cast<std::size_t>(i) * BLT_CMD_BYTES), &cmds[i]);
+            blt_unpack_cmd(&ring[static_cast<std::size_t>(i) * BLT_CMD_BYTES], &cmds[i]);
         }
 
         blt_surface_heap_t sources{};
@@ -95,7 +106,7 @@ struct Harness
         return blt_execute(fb.data(), &sources, cmds.data(), count);
     }
 
-    std::uint16_t pixel(int x, int y) const
+    [[nodiscard]] std::uint16_t pixel(int x, int y) const
     {
         return fb[(static_cast<std::size_t>(y) * BLT_FB_WIDTH) + x];
     }
@@ -108,6 +119,8 @@ struct StubFont
     std::vector<std::uint32_t> requested;
     std::vector<std::uint8_t> coverage;
 
+    // The parameter list is the uio_rasterize_fn ABI, not a choice.
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     static int raster(void* ctx, std::uint32_t codepoint, int pxSize, int phase,
                       uio_glyph_bmp_t* out)
     {
@@ -273,13 +286,14 @@ void testBatchingIsPixelIdentical()
 
         // Three colours, so the batch has to carry a per-entry palette
         // word rather than one per command.
-        const std::uint16_t colors[] = {0xF800U, 0x07E0U, 0x001FU};
+        const std::array<std::uint16_t, 3> colors = {0xF800U, 0x07E0U, 0x001FU};
         for (int i = 0; i < 12; i++)
         {
             const std::uint32_t key = zaparoo::fpga::makeGlyphKey(1, static_cast<std::uint32_t>(i));
             char encoded[5];
             zaparoo::fpga::encodeGlyphKey(key, encoded);
-            uio_text_run_fx(&h.uio, &atlas, 8, (10 + (i * 10)) << 8, 60, encoded, colors[i % 3]);
+            uio_text_run_fx(&h.uio, &atlas, 8, (10 + (i * 10)) << 8, 60, encoded,
+                            colors.at(static_cast<std::size_t>(i) % colors.size()));
         }
 
         if (uio_clut_dirty(&h.uio) != 0)
@@ -358,7 +372,7 @@ void testFrameShape()
 
     // A small RGB565 source, uploaded once and re-blitted.
     constexpr int kSrc = 32;
-    std::vector<std::uint16_t> art(kSrc * kSrc);
+    std::vector<std::uint16_t> art(static_cast<std::size_t>(kSrc) * kSrc);
     for (int y = 0; y < kSrc; y++)
     {
         for (int x = 0; x < kSrc; x++)
@@ -412,7 +426,7 @@ void testAnimatedZoomDoesNotLeak()
     check(h.init(), "harness init");
 
     constexpr int kSrc = 16;
-    std::vector<std::uint16_t> art(kSrc * kSrc, 0x07E0U);
+    std::vector<std::uint16_t> art(static_cast<std::size_t>(kSrc) * kSrc, 0x07E0U);
     const uio_image_ref_t image = uio_upload_image(&h.uio, art.data(), kSrc, kSrc, kSrc * 2);
     check(image.surf.valid != 0, "image uploaded");
 
@@ -453,6 +467,6 @@ int main()
     testFrameShape();
     testAnimatedZoomDoesNotLeak();
 
-    std::printf("fpga offload: %d checks, %d failure(s)\n", g_checks, g_failures);
-    return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+    std::printf("fpga offload: %d checks, %d failure(s)\n", results().checks, results().failures);
+    return results().failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
