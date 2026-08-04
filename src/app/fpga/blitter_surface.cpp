@@ -91,7 +91,7 @@ bool BlitterSurface::bring_up(const Config& config, std::uint8_t* ring, std::siz
     m_glyphs = std::make_unique<BlitterGlyphSource>(config.glyphPhases);
     m_slots.assign(static_cast<std::size_t>(config.glyphSlots), uio_glyph_t{});
     if (uio_glyph_atlas_init(&m_uio, &m_atlas, config.glyphAtlasWidth, config.glyphAtlasHeight,
-                             m_slots.data(), config.glyphSlots, m_glyphs->callback(),
+                             m_slots.data(), config.glyphSlots, BlitterGlyphSource::callback(),
                              m_glyphs->context(), m_glyphs->phases()) != 0)
     {
         qWarning("blitter surface: glyph atlas (%dx%d) did not fit in the source heap",
