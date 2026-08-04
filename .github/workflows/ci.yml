@@ -57,13 +57,28 @@ jobs:
       - id: resolve
         env:
           OWNER: ${{ github.repository_owner }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
         run: |
           VERSION=$(tr -d '[:space:]' < scripts/lint/VERSION)
           OWNER_LC=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
           IMAGE="ghcr.io/${OWNER_LC}/zaparoo-lint:${VERSION}"
+          # What actually costs us GHCR write is the head branch living in
+          # a *different* repo than the base, not the head repo being a
+          # fork of something. Those differ inside a fork: a same-repo PR
+          # there has a writable GITHUB_TOKEN but a head repo whose
+          # `fork` flag is true, so keying off `fork` locks a fork's own
+          # branch PRs out of publishing and skips every downstream job.
+          # Push events carry no head repo and always run in the base.
+          if [ -n "$HEAD_REPO" ] && [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            CROSS_REPO=true
+          else
+            CROSS_REPO=false
+          fi
           {
             printf 'version=%s\n' "$VERSION"
             printf 'image=%s\n' "$IMAGE"
+            printf 'cross_repo=%s\n' "$CROSS_REPO"
           } >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
@@ -79,18 +94,18 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "Lint image ${{ steps.resolve.outputs.image }} missing — building"
           fi
-      # Fork PRs cannot push to GHCR (GITHUB_TOKEN is read-only), so a
-      # scripts/lint/VERSION bump from a fork would fail mid-`docker push` with
+      # Cross-repo PRs cannot push to GHCR (GITHUB_TOKEN is read-only), so a
+      # scripts/lint/VERSION bump from one would fail mid-`docker push` with
       # an opaque "denied: forbidden". Fail fast here with a useful
-      # message instead. Maintainer-branch PRs (head.repo.fork == false)
-      # fall through to the existing build/push steps.
-      - if: steps.check.outputs.exists != 'true' && github.event.pull_request.head.repo.fork == true
+      # message instead. Branch PRs within the base repo fall through to
+      # the existing build/push steps.
+      - if: steps.check.outputs.exists != 'true' && steps.resolve.outputs.cross_repo == 'true'
         run: |
-          echo "::error::Lint image ${{ steps.resolve.outputs.image }} is not yet published. Fork PRs cannot push to GHCR — ask a maintainer to land the scripts/lint/VERSION bump from the main repo first."
+          echo "::error::Lint image ${{ steps.resolve.outputs.image }} is not yet published. Cross-repo PRs cannot push to GHCR — ask a maintainer to land the scripts/lint/VERSION bump from a branch in the base repo first."
           exit 1
-      - if: steps.check.outputs.exists != 'true' && github.event.pull_request.head.repo.fork != true
+      - if: steps.check.outputs.exists != 'true' && steps.resolve.outputs.cross_repo != 'true'
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-      - if: steps.check.outputs.exists != 'true' && github.event.pull_request.head.repo.fork != true
+      - if: steps.check.outputs.exists != 'true' && steps.resolve.outputs.cross_repo != 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
