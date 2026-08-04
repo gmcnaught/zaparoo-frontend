@@ -34,14 +34,19 @@ allow-wildcard-paths = true  # Workspace path deps have no version pin; this is 
 # Known transitive duplicates we can't resolve without forking upstream.
 # Entries are version-pinned so a future additional duplicate (e.g. a third
 # thiserror) trips the check rather than being silently swallowed.
-# Audit this list whenever cxx-qt, tungstenite, or tracing-appender are bumped.
+# Audit this list whenever cxx, cxx-qt, tungstenite, or tracing-appender are
+# bumped. Note that cxx and cxx-gen must move together -- cxx-gen is a
+# separate crate whose 0.7.x patch number shadows cxx's 1.0.x, and cxx-qt-build
+# generates the C++ half of the bridge with it, so a mismatch links as
+# undefined cxxbridge1$<patch>$ symbols rather than failing to compile.
 skip = [
     # cxx-qt-build pulls codespan-reporting 0.11 directly; its cxx-gen dep pulls 0.13.
     { crate = "codespan-reporting@0.11.1" },
     { crate = "codespan-reporting@0.13.1" },
-    # codespan-reporting 0.11 → unicode-width 0.1; codespan-reporting 0.13 → 0.2.
-    { crate = "unicode-width@0.1.14" },
-    { crate = "unicode-width@0.2.2" },
+    # cxx 1.0.198's cxxbridge-macro moved to syn 3; everything else in the
+    # graph is still on syn 2. Revisit when the rest catches up.
+    { crate = "syn@2.0.118" },
+    { crate = "syn@3.0.3" },
     # tempfile+uuid hold getrandom 0.4; rand 0.9 (via tungstenite) brings 0.3.
     # (0.3 is build-script-only in the linux/armv7 filtered graph so cargo-deny
     # doesn't surface it; listing it here would warn as unmatched.)
