@@ -8,12 +8,11 @@ pixels.
 This is the production implementation of the prototype in
 [mister-fpga-blitter `prototypes/qt`](https://github.com/gmcnaught/mister-fpga-blitter/tree/claude/fpga-gpu-offload-example-zw4p3y).
 
-> **Status: not yet run on hardware, and the target fabric is unresolved.**
-> Everything below is implemented and the display-list layer is tested
-> against the golden reference model, but no part of *this* has executed on a
-> DE10-Nano — and the ABI it emits matches only one of the two diverged
-> fabric lineages. Read "The two fabric lineages" and "Before trusting this"
-> before drawing conclusions from it.
+> **Status: not yet run on hardware.** Everything below is implemented and
+> the display-list layer is tested against the golden reference model, but no
+> part of *this* has executed on a DE10-Nano. The wire ABI it emits is the
+> canonical one; read "Opcode ABI" for which fabrics that does and does not
+> match today, and "Before trusting this" before drawing conclusions.
 
 ## Why there is a seam at all
 
@@ -188,47 +187,62 @@ running scene graph.
 1. **Measure first.** The prototype's own advice stands: confirm the A9
    actually drops frames before concluding this fixed anything. The counters
    are emit-side accounting, not frame times.
-2. **Which fabric this runs against is unresolved, and it is not a detail** —
-   see the next section.
+2. **No fabric currently carries everything this emits** — the canonical
+   lineage has the text path but has not deployed `TRILIST`; the Maldita core
+   has proven triangles but needs the opcode renumber and still lacks
+   PAL8/CLUT. See "Opcode ABI".
 3. The QML entry point is Item-rooted now, so the render loop can start —
    but it has never actually started against a fabric.
 
-## The two fabric lineages
+## Opcode ABI: `mister-fpga-blitter` `master` is canonical
 
-The blitter protocol has diverged into two incompatible specializations of
-the same wire format, and this offload currently targets one of them.
+The wire numbering this offload emits comes from `master`, which is the
+canonical map:
 
-|  | solarus lineage (`mister-fpga-blitter` `master`) | gmloader lineage (`trilist-opcode-10`, deployed in [`maldita.castilla-mister`](https://github.com/gmcnaught/maldita.castilla-mister)) |
+| Opcode | Meaning |
+|---|---|
+| 10 | `SPRITELIST` |
+| 11 | `TILEMAP` |
+| 12 | `TRILIST` |
+| 13 | `SET_TARGET` |
+
+A second numbering exists in the field. [`maldita.castilla-mister`](https://github.com/gmcnaught/maldita.castilla-mister)
+decodes `TRILIST` at 10 and `SET_TARGET` at 11, from the era when
+`blitter_ref.h` really did put `TRILIST` at 10 (`mister-fpga-blitter` branch
+`trilist-opcode-10`; its `blitter_defs.vh` still carries the comment *"10 is
+free and matches the host ABI"*). `master` then moved `TRILIST` to 12 to make
+room for `SPRITELIST`/`TILEMAP`, and that core did not follow.
+
+**That divergence is resolved in `master`'s favour — the Maldita core is the
+one that moves.** Nothing in this repository changes as a result: what is
+vendored here is already the canonical map. Until that core is updated,
+though, it is not a fabric this offload can run against, and the failure mode
+is silent rather than loud — its decoder ends in a catch-all arm rather than
+ignoring unknown opcodes, so a `TRILIST` at 12 would be fed to the generic
+blit path instead of being skipped. Host and bitstream have to move together.
+
+### What that core still lacks for this offload
+
+Even renumbered, the Maldita fabric is a deliberately slimmed build and does
+not yet carry the text path:
+
+| Feature | `master` lineage | Maldita core |
 |---|---|---|
-| opcode 10 | `SPRITELIST` | **`TRILIST`** |
-| opcode 11 | `TILEMAP` | **`SET_TARGET`** |
-| opcode 12 | `TRILIST` | not decoded |
-| opcode 13 | `SET_TARGET` | not decoded |
-| `SPRITELIST` / `TILEMAP` | production, HW-validated | **not implemented** |
-| `PAL8` + CLUT + `CLUT_UPLOAD` | production, HW-validated | **deliberately retired** (`blitter_top.sv`: *"gmloader never uses PAL8"*, CLUT_UPLOAD FSM deleted) |
-| textured triangles | sim + model only | **deployed and HW-validated** — the Maldita core's bench logs measure `fabric_ms[tri=…]` per frame on real hardware |
+| `SPRITELIST` / `TILEMAP` | production, HW-validated | not implemented |
+| `PAL8` + CLUT + `CLUT_UPLOAD` | production, HW-validated | retired — `blitter_top.sv`: *"gmloader never uses PAL8"*, CLUT_UPLOAD FSM deleted |
+| textured triangles | sim + model validated | **deployed, HW-validated** (bench logs measure `fabric_ms[tri=…]` per frame on device) |
 | region | 18 MiB @ `0x3B000000` | fixed 16 MiB window, heap ~14.75 MiB |
 
-`third_party/` is vendored from the **solarus** lineage, so the emitted
-numbering matches that fabric. Against the gmloader fabric it is actively
-wrong, not merely unsupported: the glyph batch emits opcode 10 meaning
-`SPRITELIST`, which that core decodes as `TRILIST` and feeds to the triangle
-FSM as vertex geometry.
+The removal looks shallow rather than structural: `comp_pipeline`'s CLUT
+ports are still there, just tied to constants — only the CLUT BRAM and the
+upload FSM were deleted — and the fit reports 423/553 M10K against the ~26
+blocks a 32×256×32-bit CLUT needs.
 
-So neither existing fabric serves the whole offload as written:
-
-- **solarus lineage** — the text path (PAL8 coverage atlas, CLUT ramps,
-  `SPRITELIST` batching) is exactly what that fabric provides, and the ABI
-  matches. But arbitrary-ratio scaling needs `TRILIST`, which that lineage
-  has not deployed.
-- **gmloader lineage** — arbitrary-ratio scaling is proven in the field. But
-  there is no `SPRITELIST` to batch glyphs into and no PAL8/CLUT to colour
-  them with, so the text path has no hardware underneath it at all.
-
-Choosing the target lineage is a prerequisite, not a follow-up: it decides
-which branch `scripts/sync-fpga-vendor.sh` pulls from, whether the text path
-survives in its current form, and whether `BlitterRegion`'s map is 16 or
-18 MiB.
+Without PAL8/CLUT the text path still has a route: an ARGB4444 white coverage
+atlas blitted under `BLT_BLEND_PALPHA` with `BLT_F_COLORMOD` for colour,
+which is exactly what the vendored `uio_text()` already does for the 6×8
+face. It costs one command per glyph instead of one per screen, and two bytes
+per texel instead of one.
 
 ## The QML entry point
 
