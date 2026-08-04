@@ -502,7 +502,10 @@ int main(int argc, char* argv[]) // NOLINT
     QQuickWindow* rootWindow = nullptr;
     if (!fpgaOffload)
     {
-        engine.loadFromModule("Zaparoo.App", "Main");
+        // AppWindow is a thin ApplicationWindow around Main, which is
+        // itself an Item so the FPGA offload can host it without a
+        // QML-declared Window. See docs/fpga-offload.md.
+        engine.loadFromModule("Zaparoo.App", "AppWindow");
 
         if (engine.rootObjects().isEmpty())
         {

@@ -20,7 +20,7 @@ TestCase {
     }
 
     function test_initial_state() {
-        compare(mainWindow.activeScreen, "hub");
+        compare(mainWindow.ui.activeScreen, "hub");
     }
 
     function test_system_status_properties_exist() {
@@ -31,18 +31,22 @@ TestCase {
     }
 
     function test_restart_prompt_covers_window() {
-        mainWindow.openSettingNeedsRestartModal();
-        tryCompare(mainWindow, "settingNeedsRestartModalVisible", true);
-        verify(mainWindow.settingNeedsRestartModal !== null);
-        compare(mainWindow.settingNeedsRestartModal.width, mainWindow.width);
-        compare(mainWindow.settingNeedsRestartModal.height, mainWindow.height);
-        mainWindow.cancelPendingRestart();
+        mainWindow.ui.openSettingNeedsRestartModal();
+        tryCompare(mainWindow.ui, "settingNeedsRestartModalVisible", true);
+        verify(mainWindow.ui.settingNeedsRestartModal !== null);
+        compare(mainWindow.ui.settingNeedsRestartModal.width, mainWindow.ui.width);
+        compare(mainWindow.ui.settingNeedsRestartModal.height, mainWindow.ui.height);
+        mainWindow.ui.cancelPendingRestart();
     }
 
     name: "UiWindow"
     when: windowShown
 
-    Main {
+    // AppWindow is the application's real root: a thin window shell
+    // around the Item-rooted visual tree (`ui`), which is the shape
+    // that lets the FPGA offload host the same tree without a
+    // QML-declared Window.
+    AppWindow {
         id: mainWindow
 
         fullScreen: false

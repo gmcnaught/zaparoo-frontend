@@ -86,6 +86,7 @@ qt_add_qml_module(
     URI Zaparoo.App
     VERSION 1.0
     QML_FILES
+        AppWindow.qml
         Main.qml
         MainLayout.qml
         ${_APP_QML_FILES}

@@ -50,7 +50,7 @@ class BlitterRenderLoop : public QObject
         QSize size{352, 240};
         // Item-rooted QML component to host.
         QString module = QStringLiteral("Zaparoo.App");
-        QString type = QStringLiteral("OffloadRoot");
+        QString type = QStringLiteral("Main");
         int targetFps = 60;
         // Log a frame accounting line every N frames; 0 disables.
         int statsInterval = 0;
