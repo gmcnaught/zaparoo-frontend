@@ -42,7 +42,6 @@ class BlitterPaintDevice : public QPaintDevice
     [[nodiscard]] int metric(PaintDeviceMetric metric) const override;
 
   private:
-    BlitterSurface* m_surface = nullptr;
     QSize m_size;
     std::unique_ptr<BlitterPaintEngine> m_engine;
 };

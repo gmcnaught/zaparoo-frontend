@@ -29,9 +29,18 @@ struct BlitterRegion
     static constexpr std::size_t kCtrlOffset = 0x00000000U;
     static constexpr std::size_t kCtrlBytes = 0x40U;
 
-    // ~16382 x 32 B, walked until BLT_OP_END.
+    // 16382 x 32 B, walked until BLT_OP_END.
+    //
+    // The protocol doc calls the ring "512 KiB", but that is the span
+    // from the region base to the heap -- the 64-byte control block is
+    // carved out of its front. The ring proper is 0x80000 - 0x40, which
+    // is exactly the 16382 commands the doc quotes. Taking the round
+    // number literally overruns the heap by 64 bytes, and heap offset 0
+    // is where uio_init puts the sprite arena, so the damage would have
+    // been the tail of every frame's display list scribbling over the
+    // glyph batch. The static_assert below is what caught it.
     static constexpr std::size_t kRingOffset = 0x00000040U;
-    static constexpr std::size_t kRingBytes = 0x00080000U; // 512 KiB
+    static constexpr std::size_t kRingBytes = 0x0007FFC0U; // 512 KiB - control block
 
     // Texture upload heap. SPRITELIST and TRILIST entry arrays are
     // addressed as byte offsets into THIS heap (the fabric and the
@@ -52,7 +61,7 @@ struct BlitterRegion
     // memcpy'd (see BlitterSurface::publishClut).
     static constexpr std::size_t kClutOffset = 0x00FC3000U;
     static constexpr std::size_t kClutBytes = 0x00010000U; // 64 KiB
-    static constexpr std::size_t kClutEntries = 32U * 256U;
+    static constexpr std::size_t kClutEntries = std::size_t{32} * 256;
 
     static_assert(kRingOffset + kRingBytes <= kHeapOffset);
     static_assert(kHeapOffset + kHeapBytes <= kClutOffset);
@@ -65,7 +74,7 @@ struct BlitterRegion
 // is exactly 8 slots: qword 8 is already the first ring command, and
 // the protocol doc records a real bug from a control bit that landed
 // there and read cmd0's opcode.
-enum class ControlWord : std::size_t
+enum class ControlWord : std::uint8_t
 {
     SubmitSeq = 0,  // ARM: doorbell, bumped last
     CmdCount = 1,   // ARM: valid commands in the ring this frame
@@ -94,6 +103,8 @@ class BlitterTransport
 
     BlitterTransport(const BlitterTransport&) = delete;
     BlitterTransport& operator=(const BlitterTransport&) = delete;
+    BlitterTransport(BlitterTransport&&) = delete;
+    BlitterTransport& operator=(BlitterTransport&&) = delete;
 
     // Open /dev/mem and map the region. Logs the reason and returns
     // false on failure; the caller falls back to the software path.

@@ -37,6 +37,20 @@ constexpr std::uint32_t makeGlyphKey(int fontId, std::uint32_t glyphIndex)
 // Writes at most four bytes plus a terminator.
 void encodeGlyphKey(std::uint32_t key, char out[5]);
 
+// Pack 8-bit RGB into the RGB565 the fabric's framebuffer and command
+// words carry.
+//
+// The vendored blt_rgb565() is identical, but it is defined in
+// blitter_ref.c -- the golden *software rasterizer*, which exists to
+// check the emitter's output and must never be linked into the
+// shipped binary. Four lines here is a much better trade than pulling
+// a whole reference renderer into the frontend for one bit-shift.
+// tst_fpga_offload proves the two agree over all 16.7M inputs.
+constexpr std::uint16_t packRgb565(std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+    return static_cast<std::uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+}
+
 // Expand the packed u32 CLUT mirror the host and the reference model
 // share into the fabric's DMA source layout, which carries one u32 per
 // QWORD slot. `dst` must have room for entries * 2 u32 words.

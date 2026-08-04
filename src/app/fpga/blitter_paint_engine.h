@@ -111,7 +111,7 @@ class BlitterPaintEngine : public QPaintEngine
     // modals). Anything else -- a squircle, per-corner radii, a
     // clipped path -- must fall back rather than be silently redrawn
     // as something it is not.
-    [[nodiscard]] bool asRoundedRect(const QPainterPath& path, QRect* rect, int* radius) const;
+    [[nodiscard]] static bool asRoundedRect(const QPainterPath& path, QRect* rect, int* radius);
 
     void fillRect(const QRect& r, const QColor& color);
     uio_image_ref_t imageRef(const QImage& img);

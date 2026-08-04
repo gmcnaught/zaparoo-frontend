@@ -17,7 +17,7 @@ constexpr qreal kMillimetresPerInch = 25.4;
 } // namespace
 
 BlitterPaintDevice::BlitterPaintDevice(BlitterSurface* surface)
-    : m_surface(surface), m_size(surface != nullptr ? surface->size() : QSize(0, 0)),
+    : m_size(surface != nullptr ? surface->size() : QSize(0, 0)),
       m_engine(std::make_unique<BlitterPaintEngine>(surface))
 {
 }

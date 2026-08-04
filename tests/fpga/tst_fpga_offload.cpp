@@ -227,6 +227,33 @@ void testGlyphKeyPacking()
     check(largest < (1U << 21), "the largest key fits the permissive 4-byte form");
 }
 
+// The frontend packs RGB565 itself rather than linking the reference
+// model (a software rasterizer that must never ship) for one bit-shift.
+// That is only safe while the two are bit-identical, so check every
+// input rather than spot-check.
+void testRgb565MatchesReferenceModel()
+{
+    bool identical = true;
+    for (int r = 0; r < 256 && identical; r++)
+    {
+        for (int g = 0; g < 256 && identical; g++)
+        {
+            for (int b = 0; b < 256; b++)
+            {
+                const auto r8 = static_cast<std::uint8_t>(r);
+                const auto g8 = static_cast<std::uint8_t>(g);
+                const auto b8 = static_cast<std::uint8_t>(b);
+                if (zaparoo::fpga::packRgb565(r8, g8, b8) != blt_rgb565(r8, g8, b8))
+                {
+                    identical = false;
+                    break;
+                }
+            }
+        }
+    }
+    check(identical, "packRgb565 matches the reference model over all 16.7M inputs");
+}
+
 // The host mirror is packed u32; the fabric's DMA source is one u32
 // per qword. Getting this wrong shows up as every second colour ramp
 // being wrong, which is exactly the kind of bug that is easier to
@@ -461,6 +488,7 @@ int main()
 {
     testGlyphKeyRoundTrip();
     testGlyphKeyPacking();
+    testRgb565MatchesReferenceModel();
     testClutExpansion();
     testBatchingIsPixelIdentical();
     testFullCoverageMatchesFill();

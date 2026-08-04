@@ -59,6 +59,11 @@ class BlitterRenderLoop : public QObject
     explicit BlitterRenderLoop(QObject* parent = nullptr);
     ~BlitterRenderLoop() override;
 
+    BlitterRenderLoop(const BlitterRenderLoop&) = delete;
+    BlitterRenderLoop& operator=(const BlitterRenderLoop&) = delete;
+    BlitterRenderLoop(BlitterRenderLoop&&) = delete;
+    BlitterRenderLoop& operator=(BlitterRenderLoop&&) = delete;
+
     // Bring up the render control, load the QML, and start rendering.
     // Returns false (having logged why) if the fabric, the render
     // control, or the QML entry point is unusable.
@@ -77,11 +82,9 @@ class BlitterRenderLoop : public QObject
         return m_frames;
     }
 
-  private slots:
+  private:
     void renderFrame();
     void requestUpdate();
-
-  private:
     void logFrameStats();
 
     BlitterSurface* m_surface = nullptr;

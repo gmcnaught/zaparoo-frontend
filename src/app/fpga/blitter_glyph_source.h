@@ -5,6 +5,7 @@
 #pragma once
 
 #include "blitter_codec.h"
+#include "blitter_vendor.h"
 
 #include <QByteArray>
 #include <QHash>
@@ -12,11 +13,6 @@
 #include <QRawFont>
 #include <QString>
 #include <cstdint>
-
-extern "C"
-{
-#include "mister-fpga-blitter/glyph_cache.h"
-}
 
 namespace zaparoo::fpga
 {
@@ -72,7 +68,7 @@ class BlitterGlyphSource
         return m_phases;
     }
 
-    [[nodiscard]] uio_rasterize_fn callback() const;
+    [[nodiscard]] static uio_rasterize_fn callback();
     void* context()
     {
         return this;

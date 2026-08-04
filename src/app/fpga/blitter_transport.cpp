@@ -122,7 +122,7 @@ bool BlitterTransport::open()
 
     qInfo("blitter transport: mapped 0x%08zx (+%zu KiB ring, +%zu MiB heap), seq=%u",
           static_cast<std::size_t>(BlitterRegion::kBase), BlitterRegion::kRingBytes / 1024,
-          BlitterRegion::kHeapBytes / (1024 * 1024), m_submitSeq);
+          BlitterRegion::kHeapBytes / (std::size_t{1024} * 1024), m_submitSeq);
     return true;
 }
 

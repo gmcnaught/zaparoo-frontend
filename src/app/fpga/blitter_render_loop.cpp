@@ -12,6 +12,7 @@
 #include <QQuickRenderControl>
 #include <QQuickRenderTarget>
 #include <QQuickWindow>
+#include <QString>
 
 namespace zaparoo::fpga
 {
@@ -99,8 +100,9 @@ bool BlitterRenderLoop::start(QQmlEngine* qmlEngine, BlitterSurface* surface, co
         return false;
     }
 
-    created.release();
-    m_root = item;
+    // release() hands the object over; setParent immediately gives the
+    // window ownership, so it is never unparented.
+    m_root = qobject_cast<QQuickItem*>(created.release());
     m_root->setParent(m_window.get());
     m_root->setParentItem(m_window->contentItem());
     m_root->setSize(QSizeF(config.size));
@@ -190,19 +192,31 @@ void BlitterRenderLoop::renderFrame()
 
 void BlitterRenderLoop::logFrameStats()
 {
-    const uio_stats_t& s = m_surface->stats();
+    const uio_stats_t& st = m_surface->stats();
     const FallbackStats& fb = m_device->engine()->fallbacks();
 
     // a9_* are the pixels a QPainter path would have rasterized and no
     // longer does; fb.px is what still rasterizes. The second number is
     // the one that decides whether this was worth building.
-    qInfo("blitter frame %llu: %u cmds (%u fill, %u blit, %u tri, %u glyph in %u batch), "
-          "%llu px on fabric, %llu px avoided, fallback %u draws / %llu px",
-          static_cast<unsigned long long>(m_frames), s.cmds, s.fills, s.blits, s.trilists, s.glyphs,
-          s.glyph_batches, static_cast<unsigned long long>(s.fabric_px),
-          static_cast<unsigned long long>(s.a9_fill_px + s.a9_aa_px + s.a9_resample_px +
-                                          s.a9_glyph_px),
-          fb.draws(), static_cast<unsigned long long>(fb.px));
+    // QString::arg rather than printf: the counters are fixed-width
+    // types whose printf length modifier differs between the 64-bit
+    // host build and 32-bit ARM, and casting them all to match is how
+    // the widening-cast warnings appeared in the first place.
+    const QString line =
+        QStringLiteral("blitter frame %1: %2 cmds (%3 fill, %4 blit, %5 tri, %6 glyph in %7 "
+                       "batch), %8 px on fabric, %9 px avoided, fallback %10 draws / %11 px")
+            .arg(m_frames)
+            .arg(st.cmds)
+            .arg(st.fills)
+            .arg(st.blits)
+            .arg(st.trilists)
+            .arg(st.glyphs)
+            .arg(st.glyph_batches)
+            .arg(st.fabric_px)
+            .arg(st.a9_fill_px + st.a9_aa_px + st.a9_resample_px + st.a9_glyph_px)
+            .arg(fb.draws())
+            .arg(fb.px);
+    qInfo("%s", qPrintable(line));
 }
 
 } // namespace zaparoo::fpga

@@ -51,6 +51,9 @@ target_link_libraries(zaparoo_fpga_refmodel PUBLIC zaparoo_fpga_vendor)
 # ── the Qt-facing offload ─────────────────────────────────────────────────────
 qt_add_library(
     zaparoo_fpga STATIC
+    blitter_codec.h
+    blitter_codec.cpp
+    blitter_vendor.h
     blitter_transport.h
     blitter_transport.cpp
     blitter_surface.h

@@ -23,7 +23,7 @@ QString BlitterGlyphSource::fontKey(const QRawFont& font)
     return QStringLiteral("%1|%2|%3|%4|%5")
         .arg(font.familyName(), font.styleName())
         .arg(font.pixelSize())
-        .arg(static_cast<int>(font.weight()))
+        .arg(font.weight())
         .arg(static_cast<int>(font.style()));
 }
 
@@ -63,7 +63,7 @@ void BlitterGlyphSource::encodeKey(std::uint32_t key, char out[5])
     encodeGlyphKey(key, out);
 }
 
-uio_rasterize_fn BlitterGlyphSource::callback() const
+uio_rasterize_fn BlitterGlyphSource::callback()
 {
     return &BlitterGlyphSource::rasterizeThunk;
 }
@@ -177,7 +177,7 @@ bool BlitterGlyphSource::renderFromAlphaMap(const QRawFont& font, std::uint32_t 
 
     // The alpha map's top-left corresponds to the glyph bounding
     // rect's top-left, measured from the pen on the baseline.
-    const QRect bounds = font.boundingRectForGlyph(glyph).toAlignedRect();
+    const QRect bounds = font.boundingRect(glyph).toAlignedRect();
     out->cov = dst;
     out->pitch = w;
     out->w = w;

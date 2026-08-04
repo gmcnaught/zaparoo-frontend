@@ -29,7 +29,7 @@ namespace
 
 std::uint16_t rgb565(const QColor& c)
 {
-    return blt_rgb565(static_cast<std::uint8_t>(c.red()), static_cast<std::uint8_t>(c.green()),
+    return packRgb565(static_cast<std::uint8_t>(c.red()), static_cast<std::uint8_t>(c.green()),
                       static_cast<std::uint8_t>(c.blue()));
 }
 
@@ -53,6 +53,21 @@ bool axisAligned(const QTransform& t)
 QRect mapRect(const QTransform& t, const QRectF& r)
 {
     return t.mapRect(r).toAlignedRect();
+}
+
+// Per-pixel alpha wins over constant alpha, and an opaque draw takes
+// the cheapest path the fabric has.
+std::uint8_t blendFor(bool hasAlphaChannel, std::uint8_t alpha)
+{
+    if (hasAlphaChannel)
+    {
+        return BLT_BLEND_PALPHA;
+    }
+    if (alpha < 255)
+    {
+        return BLT_BLEND_CONST_ALPHA;
+    }
+    return BLT_BLEND_COPY;
 }
 
 // Pack an ARGB32 image into the ARGB4444 the fabric's per-pixel-alpha
@@ -132,11 +147,11 @@ void BlitterPaintEngine::recycleScratch()
 void BlitterPaintEngine::updateState(const QPaintEngineState& state)
 {
     const QPaintEngine::DirtyFlags f = state.state();
-    if (f & QPaintEngine::DirtyBrush)
+    if (f.testAnyFlag(QPaintEngine::DirtyBrush))
     {
         m_brush = state.brush().color();
     }
-    if (f & QPaintEngine::DirtyPen)
+    if (f.testAnyFlag(QPaintEngine::DirtyPen))
     {
         const QPen pen = state.pen();
         m_pen = pen.color();
@@ -144,16 +159,16 @@ void BlitterPaintEngine::updateState(const QPaintEngineState& state)
         m_penWidth = qMax(1, qRound(pen.widthF()));
         m_penVisible = pen.style() != Qt::NoPen && pen.color().alpha() != 0;
     }
-    if (f & QPaintEngine::DirtyOpacity)
+    if (f.testAnyFlag(QPaintEngine::DirtyOpacity))
     {
         m_opacity = state.opacity();
     }
-    if (f & QPaintEngine::DirtyTransform)
+    if (f.testAnyFlag(QPaintEngine::DirtyTransform))
     {
         m_transform = state.transform();
     }
-    if (f & (QPaintEngine::DirtyClipRegion | QPaintEngine::DirtyClipPath |
-             QPaintEngine::DirtyClipEnabled))
+    if (f.testAnyFlags(QPaintEngine::DirtyClipRegion | QPaintEngine::DirtyClipPath |
+                       QPaintEngine::DirtyClipEnabled))
     {
         // A rectangular clip (every `clip: true` Flickable and
         // ListView) becomes a destination-rect clamp. A non-rectangular
@@ -242,7 +257,7 @@ void BlitterPaintEngine::drawRects(const QRectF* rects, int count)
 
 // ---- rounded rectangles: the antialiased-corner sites --------------
 
-bool BlitterPaintEngine::asRoundedRect(const QPainterPath& path, QRect* rect, int* radius) const
+bool BlitterPaintEngine::asRoundedRect(const QPainterPath& path, QRect* rect, int* radius)
 {
     const QRectF br = path.boundingRect();
     if (br.width() < 2 || br.height() < 2 || path.elementCount() < 4)
@@ -397,7 +412,7 @@ uio_image_ref_t BlitterPaintEngine::imageRef(const QImage& img)
     // uio_upload_image adds: the triangle rasterizer's half-texel bias
     // needs uv to reach outside the image rect, and blt_vtx_t's uv is
     // unsigned.
-    const quint32 bytes = static_cast<quint32>((img.width() + 2) * (img.height() + 2) * 2);
+    const auto bytes = static_cast<quint32>((img.width() + 2) * (img.height() + 2) * 2);
     evictImages(bytes);
 
     uio_image_ref_t ref{};
@@ -490,9 +505,7 @@ void BlitterPaintEngine::drawImage(const QRectF& r, const QImage& img, const QRe
     m_surface->flushTextBatch();
 
     const std::uint8_t a = alpha8(QColor(Qt::white), m_opacity);
-    const std::uint8_t blend = img.hasAlphaChannel() ? BLT_BLEND_PALPHA
-                               : (a < 255)           ? BLT_BLEND_CONST_ALPHA
-                                                     : BLT_BLEND_COPY;
+    const std::uint8_t blend = blendFor(img.hasAlphaChannel(), a);
 
     if (!scaled)
     {
@@ -572,9 +585,7 @@ void BlitterPaintEngine::drawTiledPixmap(const QRectF& r, const QPixmap& pm, con
     }
 
     const std::uint8_t a = alpha8(QColor(Qt::white), m_opacity);
-    const std::uint8_t blend = img.hasAlphaChannel() ? BLT_BLEND_PALPHA
-                               : (a < 255)           ? BLT_BLEND_CONST_ALPHA
-                                                     : BLT_BLEND_COPY;
+    const std::uint8_t blend = blendFor(img.hasAlphaChannel(), a);
 
     const int endX = dst.x() + dst.width();
     const int endY = dst.y() + dst.height();

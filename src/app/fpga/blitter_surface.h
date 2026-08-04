@@ -7,17 +7,12 @@
 #include "blitter_codec.h"
 #include "blitter_glyph_source.h"
 #include "blitter_transport.h"
+#include "blitter_vendor.h"
 
 #include <QSize>
 #include <cstdint>
 #include <memory>
 #include <vector>
-
-extern "C"
-{
-#include "mister-fpga-blitter/glyph_cache.h"
-#include "mister-fpga-blitter/ui_offload.h"
-}
 
 namespace zaparoo::fpga
 {
@@ -56,6 +51,8 @@ class BlitterSurface
 
     BlitterSurface(const BlitterSurface&) = delete;
     BlitterSurface& operator=(const BlitterSurface&) = delete;
+    BlitterSurface(BlitterSurface&&) = delete;
+    BlitterSurface& operator=(BlitterSurface&&) = delete;
 
     // Map the fabric and bring the offload layer up. Returns false and
     // logs the reason if the region cannot be mapped or an arena does
