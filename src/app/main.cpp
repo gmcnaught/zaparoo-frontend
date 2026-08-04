@@ -11,6 +11,10 @@
 #include "native_video_writer.h"
 #include "tinted_svg_image_provider.h"
 
+#ifdef ZAPAROO_FPGA_OFFLOAD
+#include "fpga/fpga_offload.h"
+#endif
+
 #include <QByteArray>
 #include <QChar>
 #include <QFont>
@@ -22,6 +26,7 @@
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 #include <QTranslator>
@@ -473,16 +478,42 @@ int main(int argc, char* argv[]) // NOLINT
         { qCritical("QML object creation failed for %s", qUtf8Printable(url.toString())); });
 
     startupTrace("cpp:loading QML root module");
-    engine.loadFromModule("Zaparoo.App", "Main");
 
-    if (engine.rootObjects().isEmpty())
+#ifdef ZAPAROO_FPGA_OFFLOAD
+    // The blitter offload replaces the whole present path when it
+    // starts: it hosts its own Item-rooted scene through
+    // QQuickRenderControl and the fabric composites and scans out, so
+    // the normal Window root is never loaded and the fb0 -> DDR copy
+    // below is bypassed. Every failure inside startOffload() returns
+    // false after logging, and we carry on exactly as before.
+    const bool fpgaOffload =
+        zaparoo::fpga::startOffload(&engine, QSize(static_cast<int>(zaparoo_rust_video_width()),
+                                                   static_cast<int>(zaparoo_rust_video_height())));
+    if (fpgaOffload)
     {
-        qCritical("QML engine produced no root objects; startup aborted (see earlier errors)");
-        return EXIT_FAILURE;
+        QObject::connect(&app, &QGuiApplication::aboutToQuit, &app,
+                         []() { zaparoo::fpga::stopOffload(); });
+        startupTrace("cpp:fpga offload active");
     }
-    startupTrace("cpp:QML root object created");
+#else
+    constexpr bool fpgaOffload = false;
+#endif
 
-    auto* rootWindow = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QQuickWindow* rootWindow = nullptr;
+    if (!fpgaOffload)
+    {
+        engine.loadFromModule("Zaparoo.App", "Main");
+
+        if (engine.rootObjects().isEmpty())
+        {
+            qCritical("QML engine produced no root objects; startup aborted (see earlier errors)");
+            return EXIT_FAILURE;
+        }
+        startupTrace("cpp:QML root object created");
+
+        rootWindow = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    }
+
     if (rootWindow != nullptr)
     {
         QObject::connect(rootWindow, &QQuickWindow::frameSwapped, rootWindow,
@@ -497,7 +528,11 @@ int main(int argc, char* argv[]) // NOLINT
                          });
     }
 
-    if (crtNativePathEnabled)
+    // The offload and the native video writer are mutually exclusive:
+    // a blitter core owns scanout itself and the two DDR contracts
+    // claim the same base address, so publishing fb0 frames underneath
+    // it would fight the fabric for the same memory.
+    if (crtNativePathEnabled && !fpgaOffload)
     {
         qInfo("CRT startup decision: initialising native video writer");
         initNativeVideoWriter();

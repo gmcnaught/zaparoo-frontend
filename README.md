@@ -61,6 +61,11 @@ Third-party components:
   requires a separate license from the zaparoo-update copyright holder,
   José Manuel Barroso Galindo <theypsilon@gmail.com>. See
   [`src/LICENSES/zaparoo-update-NOTICE.txt`](src/LICENSES/zaparoo-update-NOTICE.txt).
+- **mister-fpga-blitter** host layer (`src/app/fpga/vendor/`, built only with
+  `-DZAPAROO_FPGA=ON`): upstream is GPL-3.0, and its copyright holder
+  additionally licenses these files for use in Zaparoo Frontend under the terms
+  in [`COPYING`](COPYING). See
+  [`src/app/fpga/vendor/README.md`](src/app/fpga/vendor/README.md).
 - **Noto Sans** fonts: SIL Open Font License 1.1, © The Noto Project Authors.
   See [`src/LICENSES/NotoSans-ATTRIBUTION.txt`](src/LICENSES/NotoSans-ATTRIBUTION.txt)
   and [`src/LICENSES/NotoSans-OFL.txt`](src/LICENSES/NotoSans-OFL.txt).

@@ -23,6 +23,11 @@ option(ZAPAROO_BUILD_TESTS "Build unit/smoke tests" ON)
 option(ZAPAROO_DEV "Development mode: windowed window and dev core endpoint" OFF)
 option(ZAPAROO_EMBEDDED "Embedded device build (MiSTer): default fullscreen, no window chrome" OFF)
 option(ZAPAROO_WITH_UPDATE "Build with zaparoo-update integration" ON)
+# FPGA blitter offload (MiSTer). Compiling it in does not turn it on: the
+# offload also needs ZAPAROO_FPGA_OFFLOAD=1 in the environment at run time,
+# because it replaces the whole present path and requires a blitter-enabled
+# core. See docs/fpga-offload.md.
+option(ZAPAROO_FPGA "Build the FPGA blitter offload render path" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
@@ -96,6 +101,10 @@ if(ZAPAROO_WITH_UPDATE)
 endif()
 add_subdirectory(src/ui/screens)
 add_subdirectory(src/ui/app)
+
+if(ZAPAROO_FPGA)
+    add_subdirectory(src/app/fpga)
+endif()
 
 # All Zaparoo QML CMake targets must exist before ZaparooRust is included.
 include(ZaparooRust)

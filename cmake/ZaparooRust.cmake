@@ -99,6 +99,12 @@ target_include_directories(
 
 target_compile_definitions(frontend PRIVATE ZAPAROO_VERSION="${CMAKE_PROJECT_VERSION}")
 
+# FPGA blitter offload. Links the alternative render path in; whether it is
+# used is a runtime decision (see src/app/fpga/fpga_offload.h).
+if(ZAPAROO_FPGA)
+    target_link_libraries(frontend PRIVATE zaparoo_fpga)
+endif()
+
 # For static Qt (ARM32): define QT_STATIC so main.cpp's #ifdef fires. Qt itself defines this in its
 # headers, but the compiler may not see it before the first #include unless we make it explicit here
 # too.

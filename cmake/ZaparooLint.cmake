@@ -29,6 +29,12 @@ file(GLOB_RECURSE _ZAPAROO_CXX_TIDY_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DI
      "${CMAKE_SOURCE_DIR}/tests/*.cpp"
 )
 
+# Vendored upstream code (src/app/fpga/vendor) is excluded from both gates: it
+# is not ours to reformat, and re-running scripts/sync-fpga-vendor.sh would
+# revert any local change anyway.
+list(FILTER _ZAPAROO_CXX_SOURCES EXCLUDE REGEX "/src/app/fpga/vendor/")
+list(FILTER _ZAPAROO_CXX_TIDY_SOURCES EXCLUDE REGEX "/src/app/fpga/vendor/")
+
 # ── clang-format check ────────────────────────────────────────────────────────
 
 find_program(CLANG_FORMAT_EXE NAMES clang-format)

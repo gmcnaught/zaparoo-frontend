@@ -3,3 +3,7 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 
 add_subdirectory(ui)
+
+if(ZAPAROO_FPGA)
+    add_subdirectory(fpga)
+endif()
