@@ -8,10 +8,12 @@ pixels.
 This is the production implementation of the prototype in
 [mister-fpga-blitter `prototypes/qt`](https://github.com/gmcnaught/mister-fpga-blitter/tree/claude/fpga-gpu-offload-example-zw4p3y).
 
-> **Status: not yet run on hardware.** Everything below is implemented and
-> the display-list layer is tested against the golden reference model, but no
-> part of this has executed on a DE10-Nano. Read the "Before trusting this"
-> section before drawing conclusions from it.
+> **Status: not yet run on hardware, and the target fabric is unresolved.**
+> Everything below is implemented and the display-list layer is tested
+> against the golden reference model, but no part of *this* has executed on a
+> DE10-Nano — and the ABI it emits matches only one of the two diverged
+> fabric lineages. Read "The two fabric lineages" and "Before trusting this"
+> before drawing conclusions from it.
 
 ## Why there is a seam at all
 
@@ -186,10 +188,46 @@ running scene graph.
 1. **Measure first.** The prototype's own advice stands: confirm the A9
    actually drops frames before concluding this fixed anything. The counters
    are emit-side accounting, not frame times.
-2. **`TRILIST` is not in the shipped fabric yet.** Arbitrary-ratio scaling is
-   validated in simulation and against the reference model only. Until the
-   core dispatches it, scaled covers will not composite on hardware.
+2. **Which fabric this runs against is unresolved, and it is not a detail** —
+   see the next section.
 3. **The QML entry point must be Item-rooted** — see below.
+
+## The two fabric lineages
+
+The blitter protocol has diverged into two incompatible specializations of
+the same wire format, and this offload currently targets one of them.
+
+|  | solarus lineage (`mister-fpga-blitter` `master`) | gmloader lineage (`trilist-opcode-10`, deployed in [`maldita.castilla-mister`](https://github.com/gmcnaught/maldita.castilla-mister)) |
+|---|---|---|
+| opcode 10 | `SPRITELIST` | **`TRILIST`** |
+| opcode 11 | `TILEMAP` | **`SET_TARGET`** |
+| opcode 12 | `TRILIST` | not decoded |
+| opcode 13 | `SET_TARGET` | not decoded |
+| `SPRITELIST` / `TILEMAP` | production, HW-validated | **not implemented** |
+| `PAL8` + CLUT + `CLUT_UPLOAD` | production, HW-validated | **deliberately retired** (`blitter_top.sv`: *"gmloader never uses PAL8"*, CLUT_UPLOAD FSM deleted) |
+| textured triangles | sim + model only | **deployed and HW-validated** — the Maldita core's bench logs measure `fabric_ms[tri=…]` per frame on real hardware |
+| region | 18 MiB @ `0x3B000000` | fixed 16 MiB window, heap ~14.75 MiB |
+
+`third_party/` is vendored from the **solarus** lineage, so the emitted
+numbering matches that fabric. Against the gmloader fabric it is actively
+wrong, not merely unsupported: the glyph batch emits opcode 10 meaning
+`SPRITELIST`, which that core decodes as `TRILIST` and feeds to the triangle
+FSM as vertex geometry.
+
+So neither existing fabric serves the whole offload as written:
+
+- **solarus lineage** — the text path (PAL8 coverage atlas, CLUT ramps,
+  `SPRITELIST` batching) is exactly what that fabric provides, and the ABI
+  matches. But arbitrary-ratio scaling needs `TRILIST`, which that lineage
+  has not deployed.
+- **gmloader lineage** — arbitrary-ratio scaling is proven in the field. But
+  there is no `SPRITELIST` to batch glyphs into and no PAL8/CLUT to colour
+  them with, so the text path has no hardware underneath it at all.
+
+Choosing the target lineage is a prerequisite, not a follow-up: it decides
+which branch `scripts/sync-fpga-vendor.sh` pulls from, whether the text path
+survives in its current form, and whether `BlitterRegion`'s map is 16 or
+18 MiB.
 
 ## Known blocker: the QML entry point
 
